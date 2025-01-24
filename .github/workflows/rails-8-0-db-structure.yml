@@ -1,0 +1,55 @@
+name: rails-8-0-db-structure
+on:
+  schedule:
+    # Schedule: Runs at 9:00 AM and 1:00 PM Asia/Tokyo time (UTC+9) on weekdays (Monday to Friday).
+    - cron: "0 0,4 * * mon-fri"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy-erd:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: samples/rails-8-0-db-structure
+
+    permissions:
+      contents: read
+      deployments: write
+
+    services:
+      postgres:
+        image: postgres:17.2
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        env:
+          POSTGRES_PASSWORD: password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Ruby for `api/api`
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+          working-directory: samples/rails-8-0-db-structure
+
+      - name: Generate db/schema.rb
+        env:
+          SCHEMA_FORMAT: ruby
+        run: bin/rails db:create db:migrate db:schema:dump
+
+      - name: Generate ER Diagrams
+        run: npx @liam-hq/cli erd build --input db/schema.rb --format schemarb
+
+      - name: ls -alF dist
+        run: ls -alF dist
+
+      # - name: Deploy ERD to Cloudflare Pages
+      #   uses: cloudflare/wrangler-action@v3
+      #   with:
+      #     apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN_SAMPLE_PRISMA }}
+      #     accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_SAMPLE_PRISMA }}
+      #     workingDirectory: samples/prisma-with-cloudflare-pages
+      #     command: pages deploy ./dist --project-name=prisma-with-cloudflare-pages
+      #     gitHubToken: ${{ secrets.GITHUB_TOKEN }}
